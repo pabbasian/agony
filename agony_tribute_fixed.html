@@ -290,8 +290,10 @@ window.addEventListener('mouseup', () => mouse.down = false);
 
 // Mobile Controls
 const fireBtn = document.getElementById('fire-btn');
-fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); mouse.down = true; });
-fireBtn.addEventListener('touchend', (e) => { e.preventDefault(); mouse.down = false; });
+if (fireBtn) {
+    fireBtn.addEventListener('touchstart', (e) => { e.preventDefault(); mouse.down = true; });
+    fireBtn.addEventListener('touchend', (e) => { e.preventDefault(); mouse.down = false; });
+}
 
 // UI Elements
 const scoreEl = document.getElementById('score-display');
