@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agony - The Barn Owl's Journey</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050510;
+            font-family: 'Courier New', Courier, monospace;
+            color: #e0e0e0;
+            user-select: none;
+        }
+        canvas {
+            display: block;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 20px;
+            text-shadow: 0 0 5px #fff;
+        }
+        .hud-bottom {
+            display: flex;
+            gap: 20px;
+            font-size: 16px;
+        }
+        #spell-menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            border: 2px solid #d4af37;
+            padding: 20px;
+            display: none;
+            pointer-events: auto;
+            text-align: center;
+            box-shadow: 0 0 20px #d4af37;
+            z-index: 100;
+        }
+        #spell-menu h2 {
+            color: #d4af37;
+            margin-top: 0;
+        }
+        .spell-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+        .spell-slot {
+            border: 1px solid #555;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .spell-slot:hover {
+            background: #333;
+            border-color: #fff;
+        }
+        .spell-name {
+            font-weight: bold;
+            color: #aaddff;
+        }
+        .spell-desc {
+            font-size: 12px;
+            color: #aaa;
+        }
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            z-index: 10;
+        }
+        h1 {
+            font-size: 60px;
+            color: #d4af37;
+            text-shadow: 0 0 10px #d4af37, 2px 2px 0 #000;
+            margin-bottom: 10px;
+            letter-spacing: 5px;
+        }
+        p {
+            font-size: 18px;
+            max-width: 600px;
+            text-align: center;
+            line-height: 1.6;
+        }
+        button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 20px;
+            background: transparent;
+            color: #d4af37;
+            border: 2px solid #d4af37;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #d4af37;
+            color: #000;
+            box-shadow: 0 0 15px #d4af37;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .bar-container {
+            width: 200px;
+            height: 10px;
+            background: #333;
+            border: 1px solid #555;
+            margin-top: 5px;
+        }
+        .bar-fill {
+            height: 100%;
+            background: #0f0;
+            width: 100%;
+            transition: width 0.2s;
+        }
+        .lives-display {
+            color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div>
+                <div>SCORE: <span id="score-el">0</span></div>
+                <div>WORLD: <span id="world-el">1</span> / 6</div>
+            </div>
+            <div style="text-align: right;">
+                <div>POWER</div>
+                <div class="bar-container">
+                    <div id="power-bar" class="bar-fill"></div>
+                </div>
+            </div>
+        </div>
+        <div class="hud-bottom">
+            <div class="lives-display">LIVES: <span id="lives-el">3</span></div>
+            <div id="status-effects"></div>
+        </div>
+    </div>
+
+    <div id="spell-menu">
+        <h2>SELECT SPELL</h2>
+        <div class="spell-grid" id="spell-grid">
+            <!-- Spells injected via JS -->
+        </div>
+        <p style="font-size: 12px; margin-top: 15px; color: #888;">Click a spell to activate</p>
+    </div>
+
+    <div id="start-screen">
+        <h1>AGONY</h1>
+        <p>You are Alestes, the Barn Owl.<br>
+        Seek the Cosmic Power stolen by Mentor.<br>
+        Navigate 6 surreal worlds, defeat bosses, and reclaim your destiny.</p>
+        <p style="color: #aaa; font-size: 14px;">Controls: Arrow Keys/WASD to Move, Space to Shoot, 'S' for Spell Menu (when available)</p>
+        <button id="start-btn">BEGIN JOURNEY</button>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h1 id="go-title">GAME OVER</h1>
+        <p id="go-score">Final Score: 0</p>
+        <button id="restart-btn">TRY AGAIN</button>
+    </div>
+
+<script>
+/**
+ * AGONY - Reimagined for HTML5
+ * Based on the 1992 Amiga Classic by Art & Magic
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Game State
+let gameState = 'START'; // START, PLAYING, SPELL_SELECT, GAMEOVER
+let score = 0;
+let world = 1;
+let frames = 0;
+let keys = {};
+
+// Resize handling
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// Input Handling
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (e.code === 'KeyS' && gameState === 'PLAYING' && player.hasSpellScroll) {
+        openSpellMenu();
+    }
+});
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// --- CLASSES ---
+
+class Player {
+    constructor() {
+        this.x = 100;
+        this.y = canvas.height / 2;
+        this.width = 40;
+        this.height = 30;
+        this.speed = 6;
+        this.powerLevel = 1; // 1 to 3
+        this.lives = 3;
+        this.invincible = false;
+        this.invincibleTimer = 0;
+        this.hasSwords = 0; // 0, 1, or 2
+        this.hasSpellScroll = false;
+        this.spells = [];
+        this.activeSpells = {
+            rapidFire: false,
+            shield: false,
+            speed: false
+        };
+        this.shieldAngle = 0;
+    }
+
+    update() {
+        // Movement
+        let spd = this.activeSpells.speed ? this.speed * 1.5 : this.speed;
+        if (keys['ArrowUp'] || keys['KeyW']) this.y -= spd;
+        if (keys['ArrowDown'] || keys['KeyS']) this.y += spd;
+        if (keys['ArrowLeft'] || keys['KeyA']) this.x -= spd;
+        if (keys['ArrowRight'] || keys['KeyD']) this.x += spd;
+
+        // Boundaries
+        this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+        this.y = Math.max(0, Math.min(canvas.height - this.height, this.y));
+
+        // Invincibility
+        if (this.invincible) {
+            this.invincibleTimer--;
+            if (this.invincibleTimer <= 0) this.invincible = false;
+        }
+
+        // Sword Orbit
+        this.shieldAngle += 0.1;
+    }
+
+    draw() {
+        if (this.invincible && Math.floor(frames / 4) % 2 === 0) return; // Flicker
+
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+        // Draw Owl (Alestes)
+        ctx.fillStyle = '#d2b48c'; // Tan
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 20, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Wings
+        ctx.fillStyle = '#8b4513'; // SaddleBrown
+        ctx.beginPath();
+        let wingOffset = Math.sin(frames * 0.2) * 5;
+        ctx.moveTo(-10, -5);
+        ctx.quadraticCurveTo(-25, -15 + wingOffset, -15, 5);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(10, -5);
+        ctx.quadraticCurveTo(25, -15 - wingOffset, 15, 5);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#ffff00';
+        ctx.beginPath();
+        ctx.arc(5, -4, 4, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(6, -4, 1.5, 0, Math.PI*2);
+        ctx.fill();
+
+        // Beak
+        ctx.fillStyle = '#ffa500';
+        ctx.beginPath();
+        ctx.moveTo(8, 0);
+        ctx.lineTo(18, 2);
+        ctx.lineTo(8, 4);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Draw Swords
+        if (this.hasSwords > 0) {
+            this.drawSword(this.shieldAngle);
+        }
+        if (this.hasSwords > 1) {
+            this.drawSword(this.shieldAngle + Math.PI);
+        }
+
+        // Draw Shield Effect
+        if (this.activeSpells.shield) {
+            ctx.strokeStyle = `rgba(0, 255, 255, ${0.5 + Math.sin(frames * 0.2)*0.2})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x + this.width/2, this.y + this.height/2, 35, 0, Math.PI*2);
+            ctx.stroke();
+        }
+    }
+
+    drawSword(angle) {
+        const cx = this.x + this.width/2;
+        const cy = this.y + this.height/2;
+        const dist = 30;
+        const sx = cx + Math.cos(angle) * dist;
+        const sy = cy + Math.sin(angle) * dist;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle + Math.PI/2);
+
+        // Sword Blade
+        ctx.fillStyle = '#c0c0c0';
+        ctx.beginPath();
+        ctx.moveTo(0, -15);
+        ctx.lineTo(5, 0);
+        ctx.lineTo(2, 10);
+        ctx.lineTo(-2, 10);
+        ctx.lineTo(-5, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Glow
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 10;
+        ctx.stroke();
+
+        ctx.restore();
+    }
+
+    hit() {
+        if (this.invincible || this.activeSpells.shield) {
+            if (this.activeSpells.shield) {
+                this.activeSpells.shield = false;
+                createParticles(this.x, this.y, '#0ff', 10);
+                return; // Shield absorbed hit
+            }
+            return;
+        }
+
+        this.lives--;
+        updateHUD();
+        createParticles(this.x, this.y, '#d2b48c', 20);
+
+        if (this.lives <= 0) {
+            gameOver();
+        } else {
+            this.invincible = true;
+            this.invincibleTimer = 120; // 2 seconds
+            // Lose power
+            if (this.powerLevel > 1) this.powerLevel--;
+            updateHUD();
+        }
+    }
+}
+
+class Projectile {
+    constructor(x, y, dx, dy, type, isEnemy = false) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+        this.type = type; // 'wave', 'bullet', 'boss_big'
+        this.isEnemy = isEnemy;
+        this.radius = type === 'boss_big' ? 15 : 5;
+        this.markedForDeletion = false;
+    }
+
+    update() {
+        this.x += this.dx;
+        this.y += this.dy;
+
+        if (this.x < -50 || this.x > canvas.width + 50 || 
+            this.y < -50 || this.y > canvas.height + 50) {
+            this.markedForDeletion = true;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        if (this.isEnemy) {
+            ctx.fillStyle = '#ff4444';
+            ctx.shadowColor = '#f00';
+        } else {
+            ctx.fillStyle = '#aaddff';
+            ctx.shadowColor = '#0ff';
+        }
+        ctx.shadowBlur = 10;
+        
+        if (this.type === 'wave') {
+            // Echolocation Wave Visual
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 1.5, 0, Math.PI*2);
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+class Enemy {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type; // 'drone', 'waver', 'kamikaze'
+        this.width = 30;
+        this.height = 30;
+        this.hp = type === 'drone' ? 2 : 3;
+        this.markedForDeletion = false;
+        this.angle = 0;
+        this.startY = y;
+    }
+
+    update() {
+        this.x -= 3; // Move left
+        
+        if (this.type === 'waver') {
+            this.y = this.startY + Math.sin(this.x * 0.05) * 50;
+        } else if (this.type === 'kamikaze') {
+            // Simple homing
+            if (player.y > this.y) this.y += 2;
+            else this.y -= 2;
+        }
+
+        if (this.x < -50) this.markedForDeletion = true;
+
+        // Collision with player swords
+        if (player.hasSwords > 0) {
+            // Simplified sword collision check
+            const cx = player.x + player.width/2;
+            const cy = player.y + player.height/2;
+            
+            // Check sword 1
+            let s1x = cx + Math.cos(player.shieldAngle) * 30;
+            let s1y = cy + Math.sin(player.shieldAngle) * 30;
+            if (Math.hypot(this.x + this.width/2 - s1x, this.y + this.height/2 - s1y) < 20) this.takeDamage(1);
+
+            // Check sword 2
+            if (player.hasSwords > 1) {
+                let s2x = cx + Math.cos(player.shieldAngle + Math.PI) * 30;
+                let s2y = cy + Math.sin(player.shieldAngle + Math.PI) * 30;
+                if (Math.hypot(this.x + this.width/2 - s2x, this.y + this.height/2 - s2y) < 20) this.takeDamage(1);
+            }
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+        
+        // Surreal Monster Design
+        if (this.type === 'drone') {
+            ctx.fillStyle = '#8a2be2'; // BlueViolet
+            ctx.beginPath();
+            ctx.rect(-15, -15, 30, 30);
+            ctx.fill();
+            ctx.fillStyle = '#f0f';
+            ctx.fillRect(-5, -5, 10, 10);
+        } else if (this.type === 'waver') {
+            ctx.fillStyle = '#00ff7f'; // SpringGreen
+            ctx.beginPath();
+            ctx.moveTo(15, 0);
+            ctx.lineTo(-10, -15);
+            ctx.lineTo(-10, 15);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = '#ff4500'; // OrangeRed
+            ctx.beginPath();
+            ctx.arc(0, 0, 15, 0, Math.PI*2);
+            ctx.fill();
+            // Spikes
+            ctx.strokeStyle = '#fff';
+            for(let i=0; i<4; i++) {
+                ctx.rotate(Math.PI/2);
+                ctx.beginPath();
+                ctx.moveTo(15, 0);
+                ctx.lineTo(25, 0);
+                ctx.stroke();
+            }
+        }
+        
+        ctx.restore();
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        if (this.hp <= 0) {
+            this.markedForDeletion = true;
+            score += 100;
+            createParticles(this.x, this.y, '#fff', 5);
+            updateHUD();
+            
+            // Drop chance
+            if (Math.random() < 0.1) spawnPowerUp(this.x, this.y);
+        }
+    }
+}
+
+class Boss {
+    constructor(worldLevel) {
+        this.x = canvas.width - 100;
+        this.y = canvas.height / 2;
+        this.width = 80;
+        this.height = 80;
+        this.worldLevel = worldLevel;
+        this.hp = 50 * worldLevel;
+        this.maxHp = this.hp;
+        this.phase = 0;
+        this.timer = 0;
+        this.markedForDeletion = false;
+        this.name = ["Mentor's Trap", "Shadow Guardian", "Cosmic Horror", "Void Weaver", "Nightmare Owl", "MENTOR"][worldLevel-1];
+    }
+
+    update() {
+        this.timer++;
+        
+        // Movement Pattern
+        this.y = canvas.height/2 + Math.sin(this.timer * 0.02) * 200;
+
+        // Shooting
+        if (this.timer % 60 === 0) {
+            projectiles.push(new Projectile(this.x, this.y, -5, 0, 'boss_big', true));
+            projectiles.push(new Projectile(this.x, this.y, -4, -2, 'boss_big', true));
+            projectiles.push(new Projectile(this.x, this.y, -4, 2, 'boss_big', true));
+        }
+
+        if (this.hp <= 0) {
+            this.markedForDeletion = true;
+            score += 5000;
+            world++;
+            if (world > 6) {
+                victory();
+            } else {
+                // Next level start
+                player.x = 100;
+                player.invincible = true;
+                player.invincibleTimer = 180;
+            }
+            updateHUD();
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+        // Boss Visuals change by world
+        const colors = ['#800080', '#4b0082', '#00008b', '#006400', '#8b0000', '#2f4f4f'];
+        ctx.fillStyle = colors[(this.worldLevel-1) % colors.length];
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 40, 0, Math.PI*2);
+        ctx.fill();
+
+        // Evil Eye
+        ctx.fillStyle = '#ff0000';
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI*2);
+        ctx.fill();
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI*2);
+        ctx.fill();
+
+        // Health Bar
+        ctx.fillStyle = 'red';
+        ctx.fillRect(-40, -50, 80, 10);
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(-40, -50, 80 * (this.hp / this.maxHp), 10);
+
+        ctx.restore();
+
+        // Name
+        ctx.fillStyle = '#fff';
+        ctx.font = '20px Courier New';
+        ctx.textAlign = 'center';
+        ctx.fillText(this.name, this.x + this.width/2, this.y - 60);
+    }
+}
+
+class PowerUp {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vy = 0;
+        this.type = Math.random() < 0.4 ? 'potion' : (Math.random() < 0.7 ? 'sword' : 'scroll');
+        this.markedForDeletion = false;
+        this.radius = 15;
+    }
+
+    update() {
+        this.x -= 2;
+        if (this.x < -20) this.markedForDeletion = true;
+
+        // Magnet effect near player
+        const dist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (dist < 150) {
+            this.x += (player.x - this.x) * 0.05;
+            this.y += (player.y - this.y) * 0.05;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (this.type === 'potion') {
+            ctx.fillStyle = '#ff69b4'; // HotPink
+            ctx.beginPath();
+            ctx.arc(0, 0, 10, 0, Math.PI*2);
+            ctx.fill();
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('P', 0, 0);
+        } else if (this.type === 'sword') {
+            ctx.fillStyle = 'silver';
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -10);
+            ctx.lineTo(5, 0);
+            ctx.lineTo(0, 10);
+            ctx.lineTo(-5, 0);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        } else if (this.type === 'scroll') {
+            ctx.fillStyle = '#daa520'; // GoldenRod
+            ctx.fillRect(-10, -5, 20, 10);
+            ctx.fillStyle = '#000';
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('?', 0, 0);
+        }
+
+        ctx.restore();
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.vx = (Math.random() - 0.5) * 5;
+        this.vy = (Math.random() - 0.5) * 5;
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.03;
+    }
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= this.decay;
+    }
+    draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.fillRect(this.x, this.y, 3, 3);
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+// --- GLOBAL VARIABLES ---
+let player;
+let projectiles = [];
+let enemies = [];
+let particles = [];
+let powerups = [];
+let boss = null;
+let bgStars = [];
+
+// --- INITIALIZATION ---
+
+function init() {
+    player = new Player();
+    projectiles = [];
+    enemies = [];
+    particles = [];
+    powerups = [];
+    boss = null;
+    score = 0;
+    world = 1;
+    frames = 0;
+
+    // Create background stars
+    bgStars = [];
+    for(let i=0; i<100; i++) {
+        bgStars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2,
+            speed: Math.random() * 0.5 + 0.1
+        });
+    }
+
+    updateHUD();
+    gameState = 'PLAYING';
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('game-over-screen').classList.add('hidden');
+    document.getElementById('spell-menu').style.display = 'none';
+
+    gameLoop();
+}
+
+// --- GAME LOOP ---
+
+function gameLoop() {
+    if (gameState !== 'PLAYING' && gameState !== 'SPELL_SELECT') return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    frames++;
+
+    // Background
+    ctx.fillStyle = '#050510';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    bgStars.forEach(star => {
+        star.x -= star.speed;
+        if (star.x < 0) star.x = canvas.width;
+        ctx.globalAlpha = Math.random() * 0.5 + 0.3;
+        ctx.fillRect(star.x, star.y, star.size, star.size);
+    });
+    ctx.globalAlpha = 1.0;
+
+    if (gameState === 'PLAYING') {
+        // Spawn Enemies
+        if (!boss && frames % 60 === 0) {
+            const type = ['drone', 'waver', 'kamikaze'][Math.floor(Math.random()*3)];
+            enemies.push(new Enemy(canvas.width + 50, Math.random() * (canvas.height - 50), type));
+        }
+
+        // Spawn Boss logic
+        if (!boss && frames % 1000 === 0 && score >= world * 1000) {
+            boss = new Boss(world);
+        }
+
+        player.update();
+        player.draw();
+
+        // Projectiles
+        if (keys['Space'] && frames % (player.activeSpells.rapidFire ? 5 : 10) === 0) {
+            shoot();
+        }
+
+        projectiles.forEach((p, index) => {
+            p.update();
+            p.draw();
+            if (p.markedForDeletion) projectiles.splice(index, 1);
+        });
+
+        // Enemies
+        enemies.forEach((e, index) => {
+            e.update();
+            e.draw();
+
+            // Collision with player bullets
+            projectiles.forEach(p => {
+                if (!p.isEnemy && !p.markedForDeletion && !e.markedForDeletion) {
+                    if (Math.hypot(p.x - (e.x+e.width/2), p.y - (e.y+e.height/2)) < e.width/2 + p.radius) {
+                        e.takeDamage(1);
+                        p.markedForDeletion = true;
+                        createParticles(p.x, p.y, '#aaddff', 2);
+                    }
+                }
+            });
+
+            // Collision with player
+            if (!e.markedForDeletion &&
+                Math.abs(player.x - e.x) < player.width + e.width/2 &&
+                Math.abs(player.y - e.y) < player.height + e.height/2) {
+                player.hit();
+                e.markedForDeletion = true;
+                createParticles(e.x, e.y, '#f00', 10);
+            }
+
+            if (e.markedForDeletion) enemies.splice(index, 1);
+        });
+
+        // Boss
+        if (boss) {
+            boss.update();
+            boss.draw();
+
+            // Boss Bullets vs Player
+            projectiles.forEach(p => {
+                if (p.isEnemy && !p.markedForDeletion) {
+                     if (Math.hypot(p.x - (player.x+player.width/2), p.y - (player.y+player.height/2)) < player.width/2) {
+                         player.hit();
+                         p.markedForDeletion = true;
+                     }
+                }
+            });
+
+            // Player Bullets vs Boss
+            projectiles.forEach(p => {
+                if (!p.isEnemy && !p.markedForDeletion) {
+                    if (Math.hypot(p.x - (boss.x+boss.width/2), p.y - (boss.y+boss.height/2)) < boss.width/2) {
+                        boss.hp--;
+                        p.markedForDeletion = true;
+                        createParticles(p.x, p.y, '#f0f', 3);
+                        if (boss.hp <= 0) boss.markedForDeletion = true;
+                    }
+                }
+            });
+
+            if (boss.markedForDeletion) boss = null;
+        }
+
+        // PowerUps
+        powerups.forEach((pu, index) => {
+            pu.update();
+            pu.draw();
+
+            const dist = Math.hypot((player.x+player.width/2) - pu.x, (player.y+player.height/2) - pu.y);
+            if (dist < 30) {
+                applyPowerUp(pu.type);
+                powerups.splice(index, 1);
+            }
+            if (pu.markedForDeletion) powerups.splice(index, 1);
+        });
+
+        // Particles
+        particles.forEach((p, index) => {
+            p.update();
+            p.draw();
+            if (p.life <= 0) particles.splice(index, 1);
+        });
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+function shoot() {
+    const cx = player.x + player.width/2;
+    const cy = player.y + player.height/2;
+
+    if (player.powerLevel === 1) {
+        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+    } else if (player.powerLevel === 2) {
+        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, -1, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, 1, 'wave'));
+    } else {
+        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, -2, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, 2, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 7, -3, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 7, 3, 'wave'));
+    }
+}
+
+function spawnPowerUp(x, y) {
+    powerups.push(new PowerUp(x, y));
+}
+
+function createParticles(x, y, color, count) {
+    for(let i=0; i<count; i++) {
+        particles.push(new Particle(x, y, color));
+    }
+}
+
+function applyPowerUp(type) {
+    if (type === 'potion') {
+        if (player.powerLevel < 3) player.powerLevel++;
+        score += 50;
+    } else if (type === 'sword') {
+        if (player.hasSwords < 2) player.hasSwords++;
+        score += 100;
+    } else if (type === 'scroll') {
+        player.hasSpellScroll = true;
+        score += 200;
+        showStatus("SPELL SCROLL ACQUIRED! Press 'S'");
+    }
+    updateHUD();
+}
+
+// --- UI & MENUS ---
+
+const spellsDB = [
+    { name: "Rapid Fire", desc: "Fast shooting for 10s", effect: () => activateTempSpell('rapidFire', 600) },
+    { name: "Shield", desc: "One hit protection", effect: () => { player.activeSpells.shield = true; } },
+    { name: "Speed", desc: "Move faster for 10s", effect: () => activateTempSpell('speed', 600) },
+    { name: "Nuke", desc: "Clear all enemies", effect: () => { enemies.forEach(e => e.takeDamage(10)); if(boss) boss.hp -= 20; } },
+    { name: "Heal", desc: "Restore one life", effect: () => { if(player.lives < 3) player.lives++; } },
+    { name: "Score", desc: "+1000 Points", effect: () => { score += 1000; } },
+    { name: "Max Power", desc: "Full weapon upgrade", effect: () => { player.powerLevel = 3; } },
+    { name: "Bomb", desc: "Invincibility 5s", effect: () => { player.invincible = true; player.invincibleTimer = 300; } }
+];
+
+function openSpellMenu() {
+    gameState = 'SPELL_SELECT';
+    const menu = document.getElementById('spell-menu');
+    const grid = document.getElementById('spell-grid');
+    grid.innerHTML = '';
+
+    spellsDB.forEach(spell => {
+        const div = document.createElement('div');
+        div.className = 'spell-slot';
+        div.innerHTML = `<div class="spell-name">${spell.name}</div><div class="spell-desc">${spell.desc}</div>`;
+        div.onclick = () => {
+            spell.effect();
+            updateHUD();
+            closeSpellMenu();
+        };
+        grid.appendChild(div);
+    });
+
+    menu.style.display = 'block';
+}
+
+function closeSpellMenu() {
+    document.getElementById('spell-menu').style.display = 'none';
+    gameState = 'PLAYING';
+    player.hasSpellScroll = false; // Consume scroll
+    updateHUD();
+}
+
+function activateTempSpell(type, duration) {
+    player.activeSpells[type] = true;
+    setTimeout(() => {
+        player.activeSpells[type] = false;
+    }, duration);
+}
+
+function updateHUD() {
+    document.getElementById('score-el').innerText = score;
+    document.getElementById('world-el').innerText = world;
+    document.getElementById('lives-el').innerText = player.lives;
+
+    const powerPct = (player.powerLevel / 3) * 100;
+    document.getElementById('power-bar').style.width = powerPct + '%';
+
+    let statusText = "";
+    if (player.activeSpells.rapidFire) statusText += "[RAPID] ";
+    if (player.activeSpells.shield) statusText += "[SHIELD] ";
+    if (player.activeSpells.speed) statusText += "[SPEED] ";
+    if (player.hasSpellScroll) statusText += "[SPELL READY] ";
+
+    document.getElementById('status-effects').innerText = statusText;
+}
+
+function showStatus(msg) {
+    const el = document.getElementById('status-effects');
+    const original = el.innerText;
+    el.innerText = msg;
+    setTimeout(() => {
+        if (gameState === 'PLAYING') updateHUD();
+    }, 2000);
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    document.getElementById('go-score').innerText = "Final Score: " + score;
+    document.getElementById('game-over-screen').classList.remove('hidden');
+}
+
+function victory() {
+    gameState = 'GAMEOVER';
+    document.getElementById('go-title').innerText = "VICTORY!";
+    document.getElementById('go-title').style.color = "#0f0";
+    document.getElementById('go-score').innerText = "You defeated Mentor!\nScore: " + score;
+    document.getElementById('game-over-screen').classList.remove('hidden');
+}
+
+// Button Listeners
+document.getElementById('start-btn').addEventListener('click', init);
+document.getElementById('restart-btn').addEventListener('click', init);
+
+</script>
+</body>
+</html>
