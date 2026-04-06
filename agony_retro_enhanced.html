@@ -1,0 +1,1746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AGONY - The Barn Owl's Journey [RETRO ENHANCED]</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050510;
+            font-family: 'Press Start 2P', cursive;
+            color: #e0e0e0;
+            user-select: none;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+        
+        /* CRT Effects */
+        #crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            background: 
+                /* Scanlines */
+                repeating-linear-gradient(
+                    0deg,
+                    rgba(0, 0, 0, 0.15) 0px,
+                    rgba(0, 0, 0, 0.15) 1px,
+                    transparent 2px,
+                    transparent 4px
+                ),
+                /* RGB Subpixels */
+                repeating-linear-gradient(
+                    90deg,
+                    rgba(255, 0, 0, 0.06) 0px,
+                    rgba(255, 0, 0, 0.06) 2px,
+                    rgba(0, 255, 0, 0.06) 2px,
+                    rgba(0, 255, 0, 0.06) 4px,
+                    rgba(0, 0, 255, 0.06) 4px,
+                    rgba(0, 0, 255, 0.06) 6px,
+                    transparent 6px,
+                    transparent 8px
+                );
+        }
+        
+        #crt-overlay::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(
+                ellipse at center,
+                transparent 0%,
+                transparent 60%,
+                rgba(0, 0, 0, 0.3) 100%
+            );
+            animation: flicker 0.15s infinite;
+        }
+        
+        @keyframes flicker {
+            0% { opacity: 0.97; }
+            50% { opacity: 1.0; }
+            100% { opacity: 0.98; }
+        }
+        
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+            z-index: 100;
+            text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+        }
+        
+        .hud-top {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            text-shadow: 3px 3px 0 #000, 0 0 10px #fff;
+        }
+        
+        .hud-bottom {
+            display: flex;
+            gap: 20px;
+            font-size: 12px;
+        }
+        
+        #spell-menu {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            border: 4px solid #d4af37;
+            padding: 30px;
+            display: none;
+            pointer-events: auto;
+            text-align: center;
+            box-shadow: 0 0 30px #d4af37, inset 0 0 50px rgba(212, 175, 55, 0.3);
+            z-index: 200;
+            image-rendering: pixelated;
+        }
+        
+        #spell-menu h2 {
+            color: #d4af37;
+            margin-top: 0;
+            font-size: 24px;
+            text-shadow: 3px 3px 0 #000, 0 0 20px #d4af37;
+            letter-spacing: 2px;
+        }
+        
+        .spell-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .spell-slot {
+            border: 3px solid #555;
+            padding: 15px 10px;
+            cursor: pointer;
+            transition: all 0.15s;
+            background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+            min-width: 120px;
+        }
+        
+        .spell-slot:hover {
+            background: linear-gradient(180deg, #333 0%, #222 100%);
+            border-color: #fff;
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+        }
+        
+        .spell-name {
+            font-weight: bold;
+            color: #aaddff;
+            font-size: 10px;
+            margin-bottom: 5px;
+            line-height: 1.4;
+        }
+        
+        .spell-desc {
+            font-size: 8px;
+            color: #aaa;
+            line-height: 1.3;
+        }
+        
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            z-index: 150;
+        }
+        
+        h1 {
+            font-size: 72px;
+            color: #d4af37;
+            text-shadow: 4px 4px 0 #000, 0 0 30px #d4af37, 6px 6px 0 #8b6914;
+            margin-bottom: 20px;
+            letter-spacing: 15px;
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes titleGlow {
+            from { text-shadow: 4px 4px 0 #000, 0 0 20px #d4af37, 6px 6px 0 #8b6914; }
+            to { text-shadow: 4px 4px 0 #000, 0 0 40px #ffd700, 6px 6px 0 #8b6914; }
+        }
+        
+        p {
+            font-size: 14px;
+            max-width: 700px;
+            text-align: center;
+            line-height: 2;
+            color: #ccc;
+            margin-bottom: 15px;
+        }
+        
+        button {
+            margin-top: 40px;
+            padding: 20px 50px;
+            font-size: 18px;
+            font-family: 'Press Start 2P', cursive;
+            background: linear-gradient(180deg, #d4af37 0%, #8b6914 100%);
+            color: #000;
+            border: 4px solid #ffd700;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-shadow: none;
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.5), inset 0 2px 0 rgba(255,255,255,0.3);
+        }
+        
+        button:hover {
+            background: linear-gradient(180deg, #ffd700 0%, #d4af37 100%);
+            transform: scale(1.1);
+            box-shadow: 0 0 40px rgba(212, 175, 55, 0.8), inset 0 2px 0 rgba(255,255,255,0.5);
+        }
+        
+        button:active {
+            transform: scale(1.05);
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .bar-container {
+            width: 200px;
+            height: 16px;
+            background: #222;
+            border: 3px solid #555;
+            margin-top: 8px;
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.5);
+        }
+        
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00ff00, #7fff00);
+            width: 100%;
+            transition: width 0.2s;
+            box-shadow: 0 0 10px #0f0;
+        }
+        
+        .lives-display {
+            color: #ff4444;
+            text-shadow: 2px 2px 0 #000, 0 0 10px #f00;
+        }
+        
+        .music-toggle {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            pointer-events: auto;
+            z-index: 200;
+            font-size: 10px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid #d4af37;
+            color: #d4af37;
+        }
+        
+        .volume-control {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            pointer-events: auto;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 10px;
+            color: #d4af37;
+        }
+        
+        .volume-control input[type="range"] {
+            width: 100px;
+            accent-color: #d4af37;
+        }
+        
+        /* Retro text glow */
+        .retro-glow {
+            text-shadow: 0 0 10px currentColor, 0 0 20px currentColor, 0 0 30px currentColor;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="crt-overlay"></div>
+    </div>
+
+    <div id="ui-layer">
+        <div class="hud-top">
+            <div>
+                <div style="color: #ffd700;">SCORE: <span id="score-el">0</span></div>
+                <div style="color: #00ffff;">WORLD: <span id="world-el">1</span> / 6</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="color: #00ff00;">POWER</div>
+                <div class="bar-container">
+                    <div id="power-bar" class="bar-fill"></div>
+                </div>
+            </div>
+        </div>
+        <div class="hud-bottom">
+            <div class="lives-display">LIVES: <span id="lives-el">3</span></div>
+            <div id="status-effects" style="color: #ff69b4;"></div>
+        </div>
+    </div>
+
+    <button class="music-toggle" id="music-btn">🎵 MUSIC: OFF</button>
+    <div class="volume-control">
+        <span>VOL:</span>
+        <input type="range" id="volume-slider" min="0" max="100" value="50">
+    </div>
+
+    <div id="spell-menu">
+        <h2>✨ SELECT SPELL ✨</h2>
+        <div class="spell-grid" id="spell-grid">
+            <!-- Spells injected via JS -->
+        </div>
+        <p style="font-size: 10px; margin-top: 20px; color: #888;">Click a spell to activate</p>
+    </div>
+
+    <div id="start-screen">
+        <h1>AGONY</h1>
+        <p style="color: #d4af37; font-size: 16px; text-shadow: 0 0 10px #d4af37;">THE BARN OWL'S JOURNEY</p>
+        <p>You are Alestes, the Barn Owl.<br>
+        Seek the Cosmic Power stolen by Mentor.<br>
+        Navigate 6 surreal worlds, defeat bosses, and reclaim your destiny.</p>
+        <p style="color: #888; font-size: 11px; margin-top: 20px;">
+            CONTROLS:<br>
+            ARROW KEYS / WASD - Move<br>
+            SPACE - Shoot<br>
+            'S' - Spell Menu (when available)<br>
+            'M' - Toggle Music
+        </p>
+        <button id="start-btn">▶ BEGIN JOURNEY</button>
+    </div>
+
+    <div id="game-over-screen" class="hidden">
+        <h1 id="go-title">GAME OVER</h1>
+        <p id="go-score" style="font-size: 16px; color: #ffd700;">Final Score: 0</p>
+        <button id="restart-btn">↻ TRY AGAIN</button>
+    </div>
+
+<script>
+/**
+ * AGONY - RETRO ENHANCED EDITION
+ * Based on the 1992 Amiga Classic by Art & Magic
+ * Enhanced with CRT effects, pixel art visuals, and chiptune music
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// Disable image smoothing for pixel art look
+ctx.imageSmoothingEnabled = false;
+
+// Game State
+let gameState = 'START';
+let score = 0;
+let world = 1;
+let frames = 0;
+let keys = {};
+
+// Resize handling
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ============================================
+// AUDIO SYSTEM - Chiptune Music Inspired by Original Agony
+// ============================================
+
+class AudioController {
+    constructor() {
+        this.audioCtx = null;
+        this.masterGain = null;
+        this.musicEnabled = false;
+        this.sfxEnabled = true;
+        this.volume = 0.5;
+        this.currentTrack = null;
+        this.isPlaying = false;
+        this.tempo = 125;
+        this.beatDuration = 60 / this.tempo;
+        this.noteIndex = 0;
+        this.schedulerTimer = null;
+        this.nextNoteTime = 0;
+    }
+
+    init() {
+        if (!this.audioCtx) {
+            this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.audioCtx.createGain();
+            this.masterGain.connect(this.audioCtx.destination);
+            this.masterGain.gain.value = this.volume;
+        }
+        if (this.audioCtx.state === 'suspended') {
+            this.audioCtx.resume();
+        }
+    }
+
+    setVolume(val) {
+        this.volume = val;
+        if (this.masterGain) {
+            this.masterGain.gain.value = val;
+        }
+    }
+
+    toggleMusic() {
+        this.init();
+        this.musicEnabled = !this.musicEnabled;
+        if (this.musicEnabled) {
+            this.startMusic();
+        } else {
+            this.stopMusic();
+        }
+        return this.musicEnabled;
+    }
+
+    // Synthesize a note using oscillator
+    playNote(frequency, duration, type = 'square', volume = 0.3, startTime = null) {
+        if (!this.audioCtx) return;
+        
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        
+        osc.type = type;
+        osc.frequency.setValueAtTime(frequency, startTime || this.audioCtx.currentTime);
+        
+        gain.gain.setValueAtTime(volume, startTime || this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, (startTime || this.audioCtx.currentTime) + duration);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start(startTime || this.audioCtx.currentTime);
+        osc.stop((startTime || this.audioCtx.currentTime) + duration);
+    }
+
+    // Arpeggio effect common in chiptunes
+    playArpeggio(baseFreq, duration, notes = [0, 3, 7, 12]) {
+        if (!this.audioCtx) return;
+        
+        const arpeggioDuration = duration / notes.length;
+        notes.forEach((semitone, index) => {
+            const freq = baseFreq * Math.pow(2, semitone / 12);
+            const time = this.audioCtx.currentTime + index * arpeggioDuration;
+            this.playNote(freq, arpeggioDuration * 0.8, 'square', 0.2, time);
+        });
+    }
+
+    // Bass line
+    playBass(frequency, duration) {
+        if (!this.audioCtx) return;
+        
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(frequency, this.audioCtx.currentTime);
+        
+        gain.gain.setValueAtTime(0.4, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + duration);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start();
+        osc.stop(this.audioCtx.currentTime + duration);
+    }
+
+    // Noise for percussion
+    playNoise(duration, volume = 0.3) {
+        if (!this.audioCtx) return;
+        
+        const bufferSize = this.audioCtx.sampleRate * duration;
+        const buffer = this.audioCtx.createBuffer(1, bufferSize, this.audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = this.audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const gain = this.audioCtx.createGain();
+        gain.gain.setValueAtTime(volume, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + duration);
+        
+        // Lowpass filter for drum sound
+        const filter = this.audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1000;
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.masterGain);
+        
+        noise.start();
+    }
+
+    // Main theme inspired by Agony's soundtrack (Allister Brimble style)
+    // Characteristic: melodic, uplifting chiptune with arpeggios
+    startMusic() {
+        if (this.isPlaying) return;
+        this.isPlaying = true;
+        this.nextNoteTime = this.audioCtx.currentTime;
+        this.scheduleNextBeat();
+    }
+
+    stopMusic() {
+        this.isPlaying = false;
+        if (this.schedulerTimer) {
+            clearTimeout(this.schedulerTimer);
+        }
+    }
+
+    scheduleNextBeat() {
+        if (!this.isPlaying || !this.musicEnabled) return;
+
+        while (this.nextNoteTime < this.audioCtx.currentTime + 0.1) {
+            this.playBeat(this.noteIndex);
+            this.nextNoteTime += this.beatDuration / 4; // 16th notes
+            this.noteIndex++;
+        }
+
+        this.schedulerTimer = setTimeout(() => this.scheduleNextBeat(), 25);
+    }
+
+    playBeat(index) {
+        const pattern = this.getMusicPattern();
+        const beat = index % pattern.length;
+        const bar = Math.floor(index / 16) % 8;
+        
+        // Melody
+        if (pattern.melody[beat]) {
+            const note = pattern.melody[beat];
+            if (note.freq) {
+                this.playNote(note.freq, this.beatDuration / 3, note.type || 'square', 0.25, this.nextNoteTime);
+            }
+        }
+        
+        // Bass
+        if (pattern.bass[beat]) {
+            const bassNote = pattern.bass[beat];
+            if (bassNote.freq) {
+                this.playBass(bassNote.freq, this.beatDuration / 2);
+            }
+        }
+        
+        // Drums (every 4th 16th note = quarter note)
+        if (index % 4 === 0) {
+            this.playNoise(0.1, 0.3); // Kick/snare
+        }
+        if (index % 2 === 0) {
+            this.playNoise(0.05, 0.15); // Hi-hat
+        }
+    }
+
+    getMusicPattern() {
+        // Agony-inspired melody in E minor
+        const E3 = 164.81, E4 = 329.63, G4 = 392.00, A4 = 440.00, B4 = 493.88, D5 = 587.33, E5 = 659.25;
+        const G3 = 196.00, B3 = 246.94, D4 = 293.66;
+        
+        // Iconic ascending/descending pattern reminiscent of the original
+        const melody = [];
+        const bass = [];
+        
+        // 16-beat pattern
+        for (let i = 0; i < 16; i++) {
+            melody[i] = { freq: 0 };
+            bass[i] = { freq: 0 };
+        }
+        
+        // Melody line (inspired by Agony's memorable themes)
+        melody[0] = { freq: E4, type: 'square' };
+        melody[2] = { freq: G4, type: 'square' };
+        melody[4] = { freq: A4, type: 'square' };
+        melody[6] = { freq: B4, type: 'square' };
+        melody[8] = { freq: D5, type: 'square' };
+        melody[10] = { freq: E5, type: 'square' };
+        melody[12] = { freq: D5, type: 'square' };
+        melody[14] = { freq: B4, type: 'square' };
+        
+        // Variation on second pass
+        if (Math.floor(this.noteIndex / 64) % 2 === 1) {
+            melody[1] = { freq: G4, type: 'square' };
+            melody[5] = { freq: A4, type: 'square' };
+            melody[9] = { freq: E5, type: 'square' };
+            melody[13] = { freq: G4, type: 'square' };
+        }
+        
+        // Bass line
+        bass[0] = { freq: E3 };
+        bass[4] = { freq: G3 };
+        bass[8] = { freq: B3 };
+        bass[12] = { freq: D4 };
+        
+        return { melody, bass };
+    }
+
+    // Sound Effects
+    playShoot() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, this.audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(220, this.audioCtx.currentTime + 0.1);
+        
+        gain.gain.setValueAtTime(0.2, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.1);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start();
+        osc.stop(this.audioCtx.currentTime + 0.1);
+    }
+
+    playExplosion() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        this.playNoise(0.3, 0.4);
+    }
+
+    playPowerUp() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        
+        // Ascending arpeggio
+        [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+            setTimeout(() => {
+                this.playNote(freq, 0.15, 'square', 0.3);
+            }, i * 80);
+        });
+    }
+
+    playHit() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(200, this.audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(50, this.audioCtx.currentTime + 0.2);
+        
+        gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.2);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start();
+        osc.stop(this.audioCtx.currentTime + 0.2);
+    }
+
+    playBossHit() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        
+        const osc = this.audioCtx.createOscillator();
+        const gain = this.audioCtx.createGain();
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(150, this.audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(100, this.audioCtx.currentTime + 0.15);
+        
+        gain.gain.setValueAtTime(0.3, this.audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.audioCtx.currentTime + 0.15);
+        
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        
+        osc.start();
+        osc.stop(this.audioCtx.currentTime + 0.15);
+    }
+
+    playVictory() {
+        if (!this.sfxEnabled || !this.audioCtx) return;
+        
+        // Victory fanfare
+        const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+        notes.forEach((freq, i) => {
+            setTimeout(() => {
+                this.playNote(freq, 0.3, 'square', 0.4);
+            }, i * 200);
+        });
+    }
+}
+
+const audio = new AudioController();
+
+// ============================================
+// INPUT HANDLING
+// ============================================
+
+window.addEventListener('keydown', e => {
+    keys[e.code] = true;
+    
+    if (e.code === 'KeyM') {
+        const isOn = audio.toggleMusic();
+        document.getElementById('music-btn').innerText = `🎵 MUSIC: ${isOn ? 'ON' : 'OFF'}`;
+    }
+    
+    if (e.code === 'KeyS' && gameState === 'PLAYING' && player.hasSpellScroll) {
+        openSpellMenu();
+    }
+});
+
+window.addEventListener('keyup', e => keys[e.code] = false);
+
+// UI Controls
+document.getElementById('music-btn').addEventListener('click', () => {
+    const isOn = audio.toggleMusic();
+    document.getElementById('music-btn').innerText = `🎵 MUSIC: ${isOn ? 'ON' : 'OFF'}`;
+});
+
+document.getElementById('volume-slider').addEventListener('input', (e) => {
+    audio.setVolume(e.target.value / 100);
+});
+
+// ============================================
+// SPRITE DATA - Pixel Art Style
+// ============================================
+
+// Simple pixel art sprite definitions (1 = draw, 0 = empty)
+const owlSprite = [
+    [0,0,0,1,1,1,1,0,0,0],
+    [0,0,1,1,1,1,1,1,0,0],
+    [0,1,1,0,1,1,0,1,1,0],
+    [1,1,1,0,1,1,0,1,1,1],
+    [1,1,1,1,1,1,1,1,1,1],
+    [0,1,1,1,1,1,1,1,1,0],
+    [0,0,1,1,1,1,1,1,0,0],
+    [0,0,0,1,0,0,1,0,0,0]
+];
+
+const enemyDroneSprite = [
+    [0,0,1,1,1,1,0,0],
+    [0,1,1,1,1,1,1,0],
+    [1,1,0,1,1,0,1,1],
+    [1,1,1,1,1,1,1,1],
+    [1,1,0,1,1,0,1,1],
+    [0,1,1,1,1,1,1,0],
+    [0,0,1,1,1,1,0,0]
+];
+
+// ============================================
+// CLASSES
+// ============================================
+
+class Player {
+    constructor() {
+        this.x = 100;
+        this.y = canvas.height / 2;
+        this.width = 40;
+        this.height = 30;
+        this.speed = 6;
+        this.powerLevel = 1;
+        this.lives = 3;
+        this.invincible = false;
+        this.invincibleTimer = 0;
+        this.hasSwords = 0;
+        this.hasSpellScroll = false;
+        this.spells = [];
+        this.activeSpells = {
+            rapidFire: false,
+            shield: false,
+            speed: false
+        };
+        this.shieldAngle = 0;
+        this.trail = [];
+    }
+
+    update() {
+        // Movement
+        let spd = this.activeSpells.speed ? this.speed * 1.5 : this.speed;
+        if (keys['ArrowUp'] || keys['KeyW']) this.y -= spd;
+        if (keys['ArrowDown'] || keys['KeyS']) this.y += spd;
+        if (keys['ArrowLeft'] || keys['KeyA']) this.x -= spd;
+        if (keys['ArrowRight'] || keys['KeyD']) this.x += spd;
+
+        // Boundaries
+        this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
+        this.y = Math.max(0, Math.min(canvas.height - this.height, this.y));
+
+        // Invincibility
+        if (this.invincible) {
+            this.invincibleTimer--;
+            if (this.invincibleTimer <= 0) this.invincible = false;
+        }
+
+        // Sword Orbit
+        this.shieldAngle += 0.1;
+        
+        // Trail effect
+        if (frames % 3 === 0) {
+            this.trail.push({ x: this.x, y: this.y, alpha: 0.6 });
+            if (this.trail.length > 5) this.trail.shift();
+        }
+    }
+
+    draw() {
+        if (this.invincible && Math.floor(frames / 4) % 2 === 0) return;
+
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+        // Draw trail
+        this.trail.forEach((t, i) => {
+            ctx.globalAlpha = t.alpha * (i / this.trail.length);
+            ctx.fillStyle = `rgba(210, 180, 140, ${t.alpha * 0.5})`;
+            ctx.beginPath();
+            ctx.ellipse(t.x - this.x + this.width/2, t.y - this.y + this.height/2, 18, 10, 0, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1.0;
+
+        // Draw Owl (Pixel Art Style)
+        const pixelSize = 4;
+        const offsetX = -owlSprite[0].length * pixelSize / 2;
+        const offsetY = -owlSprite.length * pixelSize / 2;
+        
+        // Body gradient
+        const gradient = ctx.createLinearGradient(offsetX, offsetY, offsetX + owlSprite[0].length * pixelSize, offsetY + owlSprite.length * pixelSize);
+        gradient.addColorStop(0, '#f5deb3');
+        gradient.addColorStop(0.5, '#d2b48c');
+        gradient.addColorStop(1, '#8b6914');
+        
+        ctx.fillStyle = gradient;
+        
+        owlSprite.forEach((row, rowIndex) => {
+            row.forEach((pixel, colIndex) => {
+                if (pixel) {
+                    ctx.fillRect(
+                        offsetX + colIndex * pixelSize,
+                        offsetY + rowIndex * pixelSize,
+                        pixelSize,
+                        pixelSize
+                    );
+                }
+            });
+        });
+
+        // Eyes (glowing)
+        ctx.fillStyle = '#ffff00';
+        ctx.shadowColor = '#ffff00';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(8, -4, 5, 0, Math.PI*2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#000';
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(9, -4, 2, 0, Math.PI*2);
+        ctx.fill();
+
+        // Beak
+        ctx.fillStyle = '#ffa500';
+        ctx.beginPath();
+        ctx.moveTo(10, 0);
+        ctx.lineTo(22, 3);
+        ctx.lineTo(10, 6);
+        ctx.fill();
+
+        ctx.restore();
+
+        // Draw Swords
+        if (this.hasSwords > 0) {
+            this.drawSword(this.shieldAngle);
+        }
+        if (this.hasSwords > 1) {
+            this.drawSword(this.shieldAngle + Math.PI);
+        }
+
+        // Draw Shield Effect
+        if (this.activeSpells.shield) {
+            ctx.strokeStyle = `rgba(0, 255, 255, ${0.5 + Math.sin(frames * 0.2)*0.2})`;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = '#0ff';
+            ctx.shadowBlur = 15;
+            ctx.beginPath();
+            ctx.arc(this.x + this.width/2, this.y + this.height/2, 35, 0, Math.PI*2);
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+    }
+
+    drawSword(angle) {
+        const cx = this.x + this.width/2;
+        const cy = this.y + this.height/2;
+        const dist = 30;
+        const sx = cx + Math.cos(angle) * dist;
+        const sy = cy + Math.sin(angle) * dist;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle + Math.PI/2);
+
+        // Sword Blade (pixel style)
+        ctx.fillStyle = '#c0c0c0';
+        ctx.shadowColor = '#fff';
+        ctx.shadowBlur = 15;
+        
+        // Blade
+        ctx.fillRect(-3, -18, 6, 18);
+        // Guard
+        ctx.fillRect(-8, 0, 16, 4);
+        // Handle
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(-2, 4, 4, 8);
+
+        ctx.restore();
+    }
+
+    hit() {
+        if (this.invincible || this.activeSpells.shield) {
+            if (this.activeSpells.shield) {
+                this.activeSpells.shield = false;
+                createParticles(this.x, this.y, '#0ff', 15);
+                audio.playHit();
+                return;
+            }
+            return;
+        }
+
+        this.lives--;
+        audio.playHit();
+        updateHUD();
+        createParticles(this.x, this.y, '#d2b48c', 25);
+
+        if (this.lives <= 0) {
+            gameOver();
+        } else {
+            this.invincible = true;
+            this.invincibleTimer = 120;
+            if (this.powerLevel > 1) this.powerLevel--;
+            updateHUD();
+        }
+    }
+}
+
+class Projectile {
+    constructor(x, y, dx, dy, type, isEnemy = false) {
+        this.x = x;
+        this.y = y;
+        this.dx = dx;
+        this.dy = dy;
+        this.type = type;
+        this.isEnemy = isEnemy;
+        this.radius = type === 'boss_big' ? 15 : 5;
+        this.markedForDeletion = false;
+        this.trail = [];
+    }
+
+    update() {
+        this.trail.push({ x: this.x, y: this.y });
+        if (this.trail.length > 5) this.trail.shift();
+        
+        this.x += this.dx;
+        this.y += this.dy;
+
+        if (this.x < -50 || this.x > canvas.width + 50 || 
+            this.y < -50 || this.y > canvas.height + 50) {
+            this.markedForDeletion = true;
+        }
+    }
+
+    draw() {
+        // Draw trail
+        this.trail.forEach((t, i) => {
+            ctx.globalAlpha = (i / this.trail.length) * 0.5;
+            if (this.isEnemy) {
+                ctx.fillStyle = '#ff4444';
+            } else {
+                ctx.fillStyle = '#aaddff';
+            }
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, this.radius * 0.6, 0, Math.PI*2);
+            ctx.fill();
+        });
+        ctx.globalAlpha = 1.0;
+
+        ctx.save();
+        if (this.isEnemy) {
+            ctx.fillStyle = '#ff4444';
+            ctx.shadowColor = '#f00';
+        } else {
+            ctx.fillStyle = '#aaddff';
+            ctx.shadowColor = '#0ff';
+        }
+        ctx.shadowBlur = 15;
+        
+        if (this.type === 'wave') {
+            // Echolocation Wave Visual
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Ring effect
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius * 1.8, 0, Math.PI*2);
+            ctx.stroke();
+        } else {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+class Enemy {
+    constructor(x, y, type) {
+        this.x = x;
+        this.y = y;
+        this.type = type;
+        this.width = 30;
+        this.height = 30;
+        this.hp = type === 'drone' ? 2 : 3;
+        this.markedForDeletion = false;
+        this.angle = 0;
+        this.startY = y;
+        this.flashTimer = 0;
+    }
+
+    update() {
+        this.x -= 3;
+        
+        if (this.type === 'waver') {
+            this.y = this.startY + Math.sin(this.x * 0.05) * 50;
+        } else if (this.type === 'kamikaze') {
+            if (player.y > this.y) this.y += 2;
+            else this.y -= 2;
+        }
+
+        if (this.x < -50) this.markedForDeletion = true;
+        
+        if (this.flashTimer > 0) this.flashTimer--;
+
+        // Collision with player swords
+        if (player.hasSwords > 0) {
+            const cx = player.x + player.width/2;
+            const cy = player.y + player.height/2;
+            
+            let s1x = cx + Math.cos(player.shieldAngle) * 30;
+            let s1y = cy + Math.sin(player.shieldAngle) * 30;
+            if (Math.hypot(this.x + this.width/2 - s1x, this.y + this.height/2 - s1y) < 20) this.takeDamage(1);
+
+            if (player.hasSwords > 1) {
+                let s2x = cx + Math.cos(player.shieldAngle + Math.PI) * 30;
+                let s2y = cy + Math.sin(player.shieldAngle + Math.PI) * 30;
+                if (Math.hypot(this.x + this.width/2 - s2x, this.y + this.height/2 - s2y) < 20) this.takeDamage(1);
+            }
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+        
+        // Flash when hit
+        if (this.flashTimer > 0) {
+            ctx.globalCompositeOperation = 'lighter';
+        }
+        
+        // Surreal Monster Design (Pixel Art Style)
+        if (this.type === 'drone') {
+            const pixelSize = 4;
+            const offsetX = -enemyDroneSprite[0].length * pixelSize / 2;
+            const offsetY = -enemyDroneSprite.length * pixelSize / 2;
+            
+            ctx.fillStyle = '#8a2be2';
+            enemyDroneSprite.forEach((row, rowIndex) => {
+                row.forEach((pixel, colIndex) => {
+                    if (pixel) {
+                        ctx.fillRect(
+                            offsetX + colIndex * pixelSize,
+                            offsetY + rowIndex * pixelSize,
+                            pixelSize,
+                            pixelSize
+                        );
+                    }
+                });
+            });
+            
+            // Glowing core
+            ctx.fillStyle = '#f0f';
+            ctx.shadowColor = '#f0f';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(-6, -6, 12, 12);
+        } else if (this.type === 'waver') {
+            ctx.fillStyle = '#00ff7f';
+            ctx.shadowColor = '#0f0';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.moveTo(15, 0);
+            ctx.lineTo(-10, -15);
+            ctx.lineTo(-10, 15);
+            ctx.fill();
+        } else {
+            ctx.fillStyle = '#ff4500';
+            ctx.shadowColor = '#f60';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(0, 0, 15, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Spikes
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            for(let i=0; i<4; i++) {
+                ctx.rotate(Math.PI/2);
+                ctx.beginPath();
+                ctx.moveTo(15, 0);
+                ctx.lineTo(28, 0);
+                ctx.stroke();
+            }
+        }
+        
+        ctx.restore();
+    }
+
+    takeDamage(amount) {
+        this.hp -= amount;
+        this.flashTimer = 5;
+        if (this.hp <= 0) {
+            this.markedForDeletion = true;
+            score += 100;
+            audio.playExplosion();
+            createParticles(this.x, this.y, '#fff', 8);
+            updateHUD();
+            
+            if (Math.random() < 0.15) spawnPowerUp(this.x, this.y);
+        }
+    }
+}
+
+class Boss {
+    constructor(worldLevel) {
+        this.x = canvas.width - 100;
+        this.y = canvas.height / 2;
+        this.width = 80;
+        this.height = 80;
+        this.worldLevel = worldLevel;
+        this.hp = 50 * worldLevel;
+        this.maxHp = this.hp;
+        this.phase = 0;
+        this.timer = 0;
+        this.markedForDeletion = false;
+        this.name = ["Mentor's Trap", "Shadow Guardian", "Cosmic Horror", "Void Weaver", "Nightmare Owl", "MENTOR"][worldLevel-1];
+        this.pulsePhase = 0;
+    }
+
+    update() {
+        this.timer++;
+        this.pulsePhase += 0.1;
+        
+        this.y = canvas.height/2 + Math.sin(this.timer * 0.02) * 200;
+
+        if (this.timer % 60 === 0) {
+            projectiles.push(new Projectile(this.x, this.y, -5, 0, 'boss_big', true));
+            projectiles.push(new Projectile(this.x, this.y, -4, -2, 'boss_big', true));
+            projectiles.push(new Projectile(this.x, this.y, -4, 2, 'boss_big', true));
+        }
+
+        if (this.hp <= 0) {
+            this.markedForDeletion = true;
+            score += 5000;
+            audio.playExplosion();
+            createParticles(this.x, this.y, '#ffd700', 50);
+            world++;
+            if (world > 6) {
+                victory();
+            } else {
+                player.x = 100;
+                player.invincible = true;
+                player.invincibleTimer = 180;
+            }
+            updateHUD();
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x + this.width/2, this.y + this.height/2);
+
+        const colors = ['#800080', '#4b0082', '#00008b', '#006400', '#8b0000', '#2f4f4f'];
+        const baseColor = colors[(this.worldLevel-1) % colors.length];
+        
+        // Pulsing glow effect
+        const pulse = Math.sin(this.pulsePhase) * 0.3 + 0.7;
+        ctx.shadowColor = baseColor;
+        ctx.shadowBlur = 30 * pulse;
+
+        // Boss body
+        ctx.fillStyle = baseColor;
+        ctx.beginPath();
+        ctx.arc(0, 0, 40, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Inner ring
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        ctx.beginPath();
+        ctx.arc(0, 0, 25, 0, Math.PI*2);
+        ctx.fill();
+
+        // Evil Eye
+        ctx.fillStyle = '#ff0000';
+        ctx.shadowColor = '#f00';
+        ctx.shadowBlur = 20;
+        ctx.beginPath();
+        ctx.arc(0, 0, 15, 0, Math.PI*2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#000';
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.arc(0, 0, 5, 0, Math.PI*2);
+        ctx.fill();
+        
+        // Eye pupil tracking player
+        const angle = Math.atan2(player.y - (this.y + this.height/2), player.x - (this.x + this.width/2));
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(Math.cos(angle) * 3, Math.sin(angle) * 3, 3, 0, Math.PI*2);
+        ctx.fill();
+
+        // Health Bar
+        ctx.fillStyle = '#330000';
+        ctx.fillRect(-40, -50, 80, 12);
+        ctx.fillStyle = '#ff0000';
+        ctx.shadowColor = '#f00';
+        ctx.shadowBlur = 10;
+        ctx.fillRect(-40, -50, 80 * (this.hp / this.maxHp), 12);
+        ctx.shadowBlur = 0;
+
+        ctx.restore();
+
+        // Name
+        ctx.fillStyle = '#fff';
+        ctx.font = '14px "Press Start 2P"';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = '#000';
+        ctx.shadowBlur = 5;
+        ctx.fillText(this.name, this.x + this.width/2, this.y - 60);
+    }
+}
+
+class PowerUp {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vy = 0;
+        this.type = Math.random() < 0.4 ? 'potion' : (Math.random() < 0.7 ? 'sword' : 'scroll');
+        this.markedForDeletion = false;
+        this.radius = 15;
+        this.bobPhase = Math.random() * Math.PI * 2;
+    }
+
+    update() {
+        this.x -= 2;
+        this.bobPhase += 0.1;
+        this.y += Math.sin(this.bobPhase) * 0.5;
+        
+        if (this.x < -20) this.markedForDeletion = true;
+
+        const dist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (dist < 150) {
+            this.x += (player.x - this.x) * 0.05;
+            this.y += (player.y - this.y) * 0.05;
+        }
+    }
+
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        
+        // Glow effect
+        ctx.shadowBlur = 15;
+
+        if (this.type === 'potion') {
+            ctx.fillStyle = '#ff69b4';
+            ctx.shadowColor = '#f69';
+            ctx.beginPath();
+            ctx.arc(0, 0, 12, 0, Math.PI*2);
+            ctx.fill();
+            
+            // Sparkle
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 5;
+            ctx.fillText('P', 0, 0);
+        } else if (this.type === 'sword') {
+            ctx.fillStyle = '#c0c0c0';
+            ctx.shadowColor = '#fff';
+            ctx.fillRect(-4, -12, 8, 24);
+            ctx.fillRect(-10, -2, 20, 4);
+            ctx.fillStyle = '#8b4513';
+            ctx.fillRect(-3, 4, 6, 10);
+        } else if (this.type === 'scroll') {
+            ctx.fillStyle = '#daa520';
+            ctx.shadowColor = '#ffd700';
+            ctx.fillRect(-12, -8, 24, 16);
+            ctx.fillStyle = '#fff';
+            ctx.font = 'bold 14px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.shadowBlur = 5;
+            ctx.fillText('?', 0, 0);
+        }
+
+        ctx.restore();
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.color = color;
+        this.vx = (Math.random() - 0.5) * 8;
+        this.vy = (Math.random() - 0.5) * 8;
+        this.life = 1.0;
+        this.decay = 0.02 + Math.random() * 0.03;
+        this.size = 3 + Math.random() * 4;
+    }
+    
+    update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vx *= 0.95;
+        this.vy *= 0.95;
+        this.life -= this.decay;
+        this.size *= 0.95;
+    }
+    
+    draw() {
+        ctx.globalAlpha = this.life;
+        ctx.fillStyle = this.color;
+        ctx.shadowColor = this.color;
+        ctx.shadowBlur = 10;
+        ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+        ctx.globalAlpha = 1.0;
+        ctx.shadowBlur = 0;
+    }
+}
+
+// ============================================
+// GLOBAL VARIABLES
+// ============================================
+
+let player;
+let projectiles = [];
+let enemies = [];
+let particles = [];
+let powerups = [];
+let boss = null;
+let bgStars = [];
+let bgNebula = [];
+
+// ============================================
+// INITIALIZATION
+// ============================================
+
+function init() {
+    audio.init();
+    
+    player = new Player();
+    projectiles = [];
+    enemies = [];
+    particles = [];
+    powerups = [];
+    boss = null;
+    score = 0;
+    world = 1;
+    frames = 0;
+
+    // Create background stars
+    bgStars = [];
+    for(let i=0; i<150; i++) {
+        bgStars.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            size: Math.random() * 2 + 0.5,
+            speed: Math.random() * 0.5 + 0.1,
+            twinkle: Math.random() * Math.PI * 2
+        });
+    }
+    
+    // Create nebula clouds
+    bgNebula = [];
+    for(let i=0; i<5; i++) {
+        bgNebula.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            width: 200 + Math.random() * 300,
+            height: 100 + Math.random() * 150,
+            speed: 0.2 + Math.random() * 0.3,
+            color: `hsla(${Math.random() * 60 + 240}, 70%, 30%, 0.3)`
+        });
+    }
+
+    updateHUD();
+    gameState = 'PLAYING';
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('game-over-screen').classList.add('hidden');
+    document.getElementById('spell-menu').style.display = 'none';
+
+    gameLoop();
+}
+
+// ============================================
+// GAME LOOP
+// ============================================
+
+function gameLoop() {
+    if (gameState !== 'PLAYING' && gameState !== 'SPELL_SELECT') return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    frames++;
+
+    // Animated Background
+    // Deep space gradient
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    bgGradient.addColorStop(0, '#050510');
+    bgGradient.addColorStop(0.5, '#0a0a20');
+    bgGradient.addColorStop(1, '#050510');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Nebula clouds
+    bgNebula.forEach(nebula => {
+        nebula.x -= nebula.speed;
+        if (nebula.x + nebula.width < 0) {
+            nebula.x = canvas.width;
+            nebula.y = Math.random() * canvas.height;
+        }
+        ctx.fillStyle = nebula.color;
+        ctx.beginPath();
+        ctx.ellipse(nebula.x + nebula.width/2, nebula.y + nebula.height/2, nebula.width/2, nebula.height/2, 0, 0, Math.PI*2);
+        ctx.fill();
+    });
+
+    // Stars with parallax and twinkle
+    ctx.fillStyle = '#fff';
+    bgStars.forEach(star => {
+        star.x -= star.speed;
+        if (star.x < 0) {
+            star.x = canvas.width;
+            star.y = Math.random() * canvas.height;
+        }
+        star.twinkle += 0.05;
+        ctx.globalAlpha = 0.3 + Math.sin(star.twinkle) * 0.3;
+        ctx.fillRect(star.x, star.y, star.size, star.size);
+    });
+    ctx.globalAlpha = 1.0;
+
+    if (gameState === 'PLAYING') {
+        // Spawn Enemies
+        if (!boss && frames % 60 === 0) {
+            const type = ['drone', 'waver', 'kamikaze'][Math.floor(Math.random()*3)];
+            enemies.push(new Enemy(canvas.width + 50, Math.random() * (canvas.height - 50), type));
+        }
+
+        // Spawn Boss logic
+        if (!boss && frames % 1000 === 0 && score >= world * 1000) {
+            boss = new Boss(world);
+        }
+
+        player.update();
+        player.draw();
+
+        // Shooting
+        if (keys['Space'] && frames % (player.activeSpells.rapidFire ? 5 : 10) === 0) {
+            shoot();
+        }
+
+        projectiles.forEach((p, index) => {
+            p.update();
+            p.draw();
+            if (p.markedForDeletion) projectiles.splice(index, 1);
+        });
+
+        enemies.forEach((e, index) => {
+            e.update();
+            e.draw();
+
+            // Collision with player bullets
+            projectiles.forEach(p => {
+                if (!p.isEnemy && !p.markedForDeletion && !e.markedForDeletion) {
+                    if (Math.hypot(p.x - (e.x+e.width/2), p.y - (e.y+e.height/2)) < e.width/2 + p.radius) {
+                        e.takeDamage(1);
+                        p.markedForDeletion = true;
+                        createParticles(p.x, p.y, '#aaddff', 3);
+                    }
+                }
+            });
+
+            // Collision with player
+            if (!e.markedForDeletion &&
+                Math.abs(player.x - e.x) < player.width + e.width/2 &&
+                Math.abs(player.y - e.y) < player.height + e.height/2) {
+                player.hit();
+                e.markedForDeletion = true;
+                createParticles(e.x, e.y, '#f00', 15);
+            }
+
+            if (e.markedForDeletion) enemies.splice(index, 1);
+        });
+
+        // Boss
+        if (boss) {
+            boss.update();
+            boss.draw();
+
+            // Boss Bullets vs Player
+            projectiles.forEach(p => {
+                if (p.isEnemy && !p.markedForDeletion) {
+                     if (Math.hypot(p.x - (player.x+player.width/2), p.y - (player.y+player.height/2)) < player.width/2) {
+                         player.hit();
+                         p.markedForDeletion = true;
+                     }
+                }
+            });
+
+            // Player Bullets vs Boss
+            projectiles.forEach(p => {
+                if (!p.isEnemy && !p.markedForDeletion) {
+                    if (Math.hypot(p.x - (boss.x+boss.width/2), p.y - (boss.y+boss.height/2)) < boss.width/2) {
+                        boss.hp--;
+                        p.markedForDeletion = true;
+                        audio.playBossHit();
+                        createParticles(p.x, p.y, '#f0f', 5);
+                        if (boss.hp <= 0) boss.markedForDeletion = true;
+                    }
+                }
+            });
+
+            if (boss.markedForDeletion) boss = null;
+        }
+
+        // PowerUps
+        powerups.forEach((pu, index) => {
+            pu.update();
+            pu.draw();
+
+            const dist = Math.hypot((player.x+player.width/2) - pu.x, (player.y+player.height/2) - pu.y);
+            if (dist < 30) {
+                applyPowerUp(pu.type);
+                powerups.splice(index, 1);
+            }
+            if (pu.markedForDeletion) powerups.splice(index, 1);
+        });
+
+        // Particles
+        particles.forEach((p, index) => {
+            p.update();
+            p.draw();
+            if (p.life <= 0) particles.splice(index, 1);
+        });
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+function shoot() {
+    const cx = player.x + player.width/2;
+    const cy = player.y + player.height/2;
+    audio.playShoot();
+
+    if (player.powerLevel === 1) {
+        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+    } else if (player.powerLevel === 2) {
+        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, -1, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, 1, 'wave'));
+    } else {
+        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, -2, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 8, 2, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 7, -3, 'wave'));
+        projectiles.push(new Projectile(cx, cy, 7, 3, 'wave'));
+    }
+}
+
+function spawnPowerUp(x, y) {
+    powerups.push(new PowerUp(x, y));
+}
+
+function createParticles(x, y, color, count) {
+    for(let i=0; i<count; i++) {
+        particles.push(new Particle(x, y, color));
+    }
+}
+
+function applyPowerUp(type) {
+    audio.playPowerUp();
+    
+    if (type === 'potion') {
+        if (player.powerLevel < 3) player.powerLevel++;
+        score += 50;
+    } else if (type === 'sword') {
+        if (player.hasSwords < 2) player.hasSwords++;
+        score += 100;
+    } else if (type === 'scroll') {
+        player.hasSpellScroll = true;
+        score += 200;
+        showStatus("✨ SPELL SCROLL ACQUIRED! Press 'S'");
+    }
+    updateHUD();
+}
+
+// ============================================
+// UI & MENUS
+// ============================================
+
+const spellsDB = [
+    { name: "RAPID FIRE", desc: "Fast shooting 10s", effect: () => activateTempSpell('rapidFire', 600) },
+    { name: "SHIELD", desc: "One hit protection", effect: () => { player.activeSpells.shield = true; } },
+    { name: "SPEED", desc: "Move faster 10s", effect: () => activateTempSpell('speed', 600) },
+    { name: "NUKE", desc: "Clear all enemies", effect: () => { enemies.forEach(e => e.takeDamage(10)); if(boss) boss.hp -= 20; } },
+    { name: "HEAL", desc: "Restore one life", effect: () => { if(player.lives < 3) player.lives++; } },
+    { name: "SCORE", desc: "+1000 Points", effect: () => { score += 1000; } },
+    { name: "MAX POWER", desc: "Full weapon upgrade", effect: () => { player.powerLevel = 3; } },
+    { name: "BOMB", desc: "Invincibility 5s", effect: () => { player.invincible = true; player.invincibleTimer = 300; } }
+];
+
+function openSpellMenu() {
+    gameState = 'SPELL_SELECT';
+    const menu = document.getElementById('spell-menu');
+    const grid = document.getElementById('spell-grid');
+    grid.innerHTML = '';
+
+    spellsDB.forEach(spell => {
+        const div = document.createElement('div');
+        div.className = 'spell-slot';
+        div.innerHTML = `<div class="spell-name">${spell.name}</div><div class="spell-desc">${spell.desc}</div>`;
+        div.onclick = () => {
+            spell.effect();
+            updateHUD();
+            closeSpellMenu();
+        };
+        grid.appendChild(div);
+    });
+
+    menu.style.display = 'block';
+}
+
+function closeSpellMenu() {
+    document.getElementById('spell-menu').style.display = 'none';
+    gameState = 'PLAYING';
+    player.hasSpellScroll = false;
+    updateHUD();
+}
+
+function activateTempSpell(type, duration) {
+    player.activeSpells[type] = true;
+    setTimeout(() => {
+        player.activeSpells[type] = false;
+    }, duration);
+}
+
+function updateHUD() {
+    document.getElementById('score-el').innerText = score;
+    document.getElementById('world-el').innerText = world;
+    document.getElementById('lives-el').innerText = player.lives;
+
+    const powerPct = (player.powerLevel / 3) * 100;
+    document.getElementById('power-bar').style.width = powerPct + '%';
+
+    let statusText = "";
+    if (player.activeSpells.rapidFire) statusText += "[RAPID] ";
+    if (player.activeSpells.shield) statusText += "[SHIELD] ";
+    if (player.activeSpells.speed) statusText += "[SPEED] ";
+    if (player.hasSpellScroll) statusText += "[SPELL READY] ";
+
+    document.getElementById('status-effects').innerText = statusText;
+}
+
+function showStatus(msg) {
+    const el = document.getElementById('status-effects');
+    const original = el.innerText;
+    el.innerText = msg;
+    setTimeout(() => {
+        if (gameState === 'PLAYING') updateHUD();
+    }, 2000);
+}
+
+function gameOver() {
+    gameState = 'GAMEOVER';
+    document.getElementById('go-score').innerText = "Final Score: " + score;
+    document.getElementById('game-over-screen').classList.remove('hidden');
+    audio.stopMusic();
+}
+
+function victory() {
+    gameState = 'GAMEOVER';
+    document.getElementById('go-title').innerText = "VICTORY!";
+    document.getElementById('go-title').style.color = "#0f0";
+    document.getElementById('go-score').innerText = "You defeated Mentor!\nScore: " + score;
+    document.getElementById('game-over-screen').classList.remove('hidden');
+    audio.playVictory();
+    audio.stopMusic();
+}
+
+// Button Listeners
+document.getElementById('start-btn').addEventListener('click', init);
+document.getElementById('restart-btn').addEventListener('click', init);
+
+</script>
+</body>
+</html>
