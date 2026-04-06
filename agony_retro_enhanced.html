@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AGONY - The Barn Owl's Journey [RETRO ENHANCED]</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>AETHER OWL - Mobile Retro Shooter</title>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         * {
@@ -19,6 +21,9 @@
             font-family: 'Press Start 2P', cursive;
             color: #e0e0e0;
             user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            overscroll-behavior: none;
         }
         
         #gameContainer {
@@ -26,12 +31,14 @@
             width: 100vw;
             height: 100vh;
             overflow: hidden;
+            touch-action: none;
         }
-        
+
         canvas {
             display: block;
             image-rendering: pixelated;
             image-rendering: crisp-edges;
+            touch-action: none;
         }
         
         /* CRT Effects */
@@ -719,26 +726,133 @@ class AudioController {
 const audio = new AudioController();
 
 // ============================================
-// INPUT HANDLING
+// INPUT HANDLING - MOBILE FIRST
 // ============================================
 
+const inputState = {
+    x: 0,
+    y: 0,
+    firing: false,
+    touchIdLeft: null,
+    touchIdRight: null,
+    joystickOrigin: { x: 0, y: 0 },
+    joystickCurrent: { x: 0, y: 0 }
+};
+
+// Touch Controls
+canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    initAudio(); // Ensure audio starts on first touch
+    
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        
+        // Left Side: Movement Joystick
+        if (t.clientX < window.innerWidth / 2 && inputState.touchIdLeft === null) {
+            inputState.touchIdLeft = t.identifier;
+            inputState.joystickOrigin = { x: t.clientX, y: t.clientY };
+            inputState.joystickCurrent = { x: t.clientX, y: t.clientY };
+            updateJoystickVector();
+        }
+        
+        // Right Side: Fire Button
+        if (t.clientX >= window.innerWidth / 2 && inputState.touchIdRight === null) {
+            inputState.touchIdRight = t.identifier;
+            inputState.firing = true;
+            triggerHaptic(10);
+        }
+    }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        
+        if (t.identifier === inputState.touchIdLeft) {
+            inputState.joystickCurrent = { x: t.clientX, y: t.clientY };
+            updateJoystickVector();
+        }
+    }
+}, { passive: false });
+
+const endTouch = (e) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const t = e.changedTouches[i];
+        
+        if (t.identifier === inputState.touchIdLeft) {
+            inputState.touchIdLeft = null;
+            inputState.x = 0;
+            inputState.y = 0;
+            inputState.joystickOrigin = { x: 0, y: 0 };
+        }
+        
+        if (t.identifier === inputState.touchIdRight) {
+            inputState.touchIdRight = null;
+            inputState.firing = false;
+        }
+    }
+};
+
+canvas.addEventListener('touchend', endTouch);
+canvas.addEventListener('touchcancel', endTouch);
+
+function updateJoystickVector() {
+    const dx = inputState.joystickCurrent.x - inputState.joystickOrigin.x;
+    const dy = inputState.joystickCurrent.y - inputState.joystickOrigin.y;
+    const distance = Math.sqrt(dx*dx + dy*dy);
+    const maxDist = 60; // Max joystick radius
+    
+    const normDist = Math.min(distance, maxDist);
+    const angle = Math.atan2(dy, dx);
+    
+    inputState.x = (Math.cos(angle) * normDist) / maxDist;
+    inputState.y = (Math.sin(angle) * normDist) / maxDist;
+}
+
+// Keyboard Fallback (for desktop testing)
+const keys = {};
 window.addEventListener('keydown', e => {
     keys[e.code] = true;
-    
     if (e.code === 'KeyM') {
         const isOn = audio.toggleMusic();
         document.getElementById('music-btn').innerText = `🎵 MUSIC: ${isOn ? 'ON' : 'OFF'}`;
     }
-    
-    if (e.code === 'KeyS' && gameState === 'PLAYING' && player.hasSpellScroll) {
-        openSpellMenu();
-    }
+    if (e.code === 'Space') inputState.firing = true;
 });
 
-window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('keyup', e => {
+    keys[e.code] = false;
+    if (e.code === 'Space') inputState.firing = false;
+});
+
+// Helper to get input (prioritizes touch over keyboard)
+function getInput() {
+    if (inputState.touchIdLeft !== null) {
+        return { x: inputState.x, y: inputState.y, firing: inputState.firing };
+    }
+    
+    // Keyboard fallback
+    let kx = 0, ky = 0;
+    if (keys['ArrowUp'] || keys['KeyW']) ky = -1;
+    if (keys['ArrowDown'] || keys['KeyS']) ky = 1;
+    if (keys['ArrowLeft'] || keys['KeyA']) kx = -1;
+    if (keys['ArrowRight'] || keys['KeyD']) kx = 1;
+    
+    // Normalize diagonal
+    if (kx !== 0 && ky !== 0) {
+        const len = Math.sqrt(kx*kx + ky*ky);
+        kx /= len;
+        ky /= len;
+    }
+    
+    return { x: kx, y: ky, firing: inputState.firing || keys['Space'] };
+}
 
 // UI Controls
 document.getElementById('music-btn').addEventListener('click', () => {
+    initAudio();
     const isOn = audio.toggleMusic();
     document.getElementById('music-btn').innerText = `🎵 MUSIC: ${isOn ? 'ON' : 'OFF'}`;
 });
@@ -801,12 +915,17 @@ class Player {
     }
 
     update() {
+        const input = getInput();
+        
         // Movement
         let spd = this.activeSpells.speed ? this.speed * 1.5 : this.speed;
-        if (keys['ArrowUp'] || keys['KeyW']) this.y -= spd;
-        if (keys['ArrowDown'] || keys['KeyS']) this.y += spd;
-        if (keys['ArrowLeft'] || keys['KeyA']) this.x -= spd;
-        if (keys['ArrowRight'] || keys['KeyD']) this.x += spd;
+        this.x += input.x * spd;
+        this.y += input.y * spd;
+
+        // Shooting
+        if (input.firing && frames % (this.activeSpells.rapidFire ? 5 : 10) === 0) {
+            this.shoot();
+        }
 
         // Boundaries
         this.x = Math.max(0, Math.min(canvas.width - this.width, this.x));
@@ -955,6 +1074,7 @@ class Player {
 
         this.lives--;
         audio.playHit();
+        triggerHaptic(50);
         updateHUD();
         createParticles(this.x, this.y, '#d2b48c', 25);
 
@@ -965,6 +1085,26 @@ class Player {
             this.invincibleTimer = 120;
             if (this.powerLevel > 1) this.powerLevel--;
             updateHUD();
+        }
+    }
+    
+    shoot() {
+        const cx = this.x + this.width/2;
+        const cy = this.y + this.height/2;
+        audio.playShoot();
+
+        if (this.powerLevel === 1) {
+            projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+        } else if (this.powerLevel === 2) {
+            projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+            projectiles.push(new Projectile(cx, cy, 8, -1, 'wave'));
+            projectiles.push(new Projectile(cx, cy, 8, 1, 'wave'));
+        } else {
+            projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
+            projectiles.push(new Projectile(cx, cy, 8, -2, 'wave'));
+            projectiles.push(new Projectile(cx, cy, 8, 2, 'wave'));
+            projectiles.push(new Projectile(cx, cy, 7, -3, 'wave'));
+            projectiles.push(new Projectile(cx, cy, 7, 3, 'wave'));
         }
     }
 }
@@ -1504,11 +1644,6 @@ function gameLoop() {
         player.update();
         player.draw();
 
-        // Shooting
-        if (keys['Space'] && frames % (player.activeSpells.rapidFire ? 5 : 10) === 0) {
-            shoot();
-        }
-
         projectiles.forEach((p, index) => {
             p.update();
             p.draw();
@@ -1595,26 +1730,6 @@ function gameLoop() {
     }
 
     requestAnimationFrame(gameLoop);
-}
-
-function shoot() {
-    const cx = player.x + player.width/2;
-    const cy = player.y + player.height/2;
-    audio.playShoot();
-
-    if (player.powerLevel === 1) {
-        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
-    } else if (player.powerLevel === 2) {
-        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
-        projectiles.push(new Projectile(cx, cy, 8, -1, 'wave'));
-        projectiles.push(new Projectile(cx, cy, 8, 1, 'wave'));
-    } else {
-        projectiles.push(new Projectile(cx, cy, 8, 0, 'wave'));
-        projectiles.push(new Projectile(cx, cy, 8, -2, 'wave'));
-        projectiles.push(new Projectile(cx, cy, 8, 2, 'wave'));
-        projectiles.push(new Projectile(cx, cy, 7, -3, 'wave'));
-        projectiles.push(new Projectile(cx, cy, 7, 3, 'wave'));
-    }
 }
 
 function spawnPowerUp(x, y) {
